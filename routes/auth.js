@@ -99,7 +99,7 @@ router.post('/signup/request-otp', async (req, res) => {
     });
   } catch (error) {
     console.error('Signup request OTP error:', error.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 
@@ -156,7 +156,7 @@ router.post('/signup/verify-otp', async (req, res) => {
     res.json({ token, message: 'User verified and created successfully' });
   } catch (error) {
     console.error('Signup verify OTP error:', error.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 
@@ -203,7 +203,7 @@ router.post('/signup/resend-otp', async (req, res) => {
     });
   } catch (error) {
     console.error('Signup resend OTP error:', error.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 
@@ -259,7 +259,7 @@ router.post('/forgot-password/request-otp', async (req, res) => {
     return res.json(genericResponse);
   } catch (error) {
     console.error('Forgot password request OTP error:', error.message);
-    return res.status(500).send('Server Error');
+    return res.status(500).json({ message: 'Server Error' });
   }
 });
 
@@ -309,7 +309,7 @@ router.post('/forgot-password/resend-otp', async (req, res) => {
     });
   } catch (error) {
     console.error('Forgot password resend OTP error:', error.message);
-    return res.status(500).send('Server Error');
+    return res.status(500).json({ message: 'Server Error' });
   }
 });
 
@@ -360,7 +360,7 @@ router.post('/forgot-password/verify-otp', async (req, res) => {
     return res.json({ message: 'Password reset successful. You can now log in.' });
   } catch (error) {
     console.error('Forgot password verify OTP error:', error.message);
-    return res.status(500).send('Server Error');
+    return res.status(500).json({ message: 'Server Error' });
   }
 });
 
@@ -400,7 +400,7 @@ router.post('/login', async (req, res) => {
     );
   } catch (error) {
     console.error("Login error:", error.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 
