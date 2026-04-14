@@ -1,7 +1,21 @@
+async function readResponseBody(response) {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 export async function sendEmail({ to, toName, subject, htmlContent, attachments = [] }) {
-  if (!process.env.BREVO_API_KEY) {
-    console.warn('[WARNING] BREVO_API_KEY is not defined in .env. Skipping email dispatch.');
-    return;
+  const apiKey = String(process.env.BREVO_API_KEY || '').trim();
+  if (!apiKey) {
+    const err = new Error(
+      'Email is not configured (set BREVO_API_KEY on the server to send OTP emails).'
+    );
+    err.code = 'EMAIL_NOT_CONFIGURED';
+    throw err;
   }
 
   const payload = {
@@ -12,22 +26,35 @@ export async function sendEmail({ to, toName, subject, htmlContent, attachments 
     to: [{ email: to, name: toName || to }],
     subject,
     htmlContent,
-    attachment: attachments,
   };
+  // Brevo rejects requests that include `attachment: []` ("attachment is missing" / invalid).
+  if (attachments.length > 0) {
+    payload.attachment = attachments;
+  }
 
   const response = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      'api-key': process.env.BREVO_API_KEY,
+      'api-key': apiKey,
     },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(JSON.stringify(errorData));
+    const errorData = await readResponseBody(response);
+    const detail =
+      typeof errorData === 'string'
+        ? errorData
+        : errorData
+          ? JSON.stringify(errorData)
+          : `HTTP ${response.status}`;
+    console.error('[email] Brevo send failed:', detail);
+    const err = new Error('Brevo rejected or failed to send the email.');
+    err.code = 'EMAIL_SEND_FAILED';
+    err.detail = detail;
+    throw err;
   }
 }
 

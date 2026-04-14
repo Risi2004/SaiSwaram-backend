@@ -19,6 +19,20 @@ import {
 
 const router = express.Router();
 
+function respondIfEmailFailure(res, error) {
+  if (error?.code === 'EMAIL_NOT_CONFIGURED') {
+    res.status(503).json({ message: error.message });
+    return true;
+  }
+  if (error?.code === 'EMAIL_SEND_FAILED') {
+    res.status(503).json({
+      message: 'Unable to send email right now. Please try again in a few minutes.',
+    });
+    return true;
+  }
+  return false;
+}
+
 function signTokenForUser(userId) {
   return new Promise((resolve, reject) => {
     jwt.sign(
@@ -68,6 +82,13 @@ router.post('/signup/request-otp', async (req, res) => {
       }
     }
 
+    await sendSignupOtpEmail({
+      to: normalizedEmail,
+      name: String(name).trim(),
+      otpCode,
+      expiresInMinutes: policy.expiryMinutes,
+    });
+
     await PendingSignup.findOneAndUpdate(
       { email: normalizedEmail },
       {
@@ -82,15 +103,8 @@ router.post('/signup/request-otp', async (req, res) => {
         resendCount: pending ? pending.resendCount + 1 : 0,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
-
-    await sendSignupOtpEmail({
-      to: normalizedEmail,
-      name: String(name).trim(),
-      otpCode,
-      expiresInMinutes: policy.expiryMinutes,
-    });
 
     res.json({
       message: 'OTP sent to your email address',
@@ -99,6 +113,7 @@ router.post('/signup/request-otp', async (req, res) => {
     });
   } catch (error) {
     console.error('Signup request OTP error:', error.message);
+    if (respondIfEmailFailure(res, error)) return;
     res.status(500).json({ message: 'Server Error' });
   }
 });
@@ -183,12 +198,6 @@ router.post('/signup/resend-otp', async (req, res) => {
 
     const otpCode = generateOtpCode();
     const policy = getOtpPolicy();
-    pending.otpHash = hashOtp(otpCode);
-    pending.otpExpiresAt = otpExpiryDate();
-    pending.attemptCount = 0;
-    pending.resendCount += 1;
-    pending.lastOtpSentAt = new Date();
-    await pending.save();
 
     await sendSignupOtpEmail({
       to: pending.email,
@@ -197,12 +206,20 @@ router.post('/signup/resend-otp', async (req, res) => {
       expiresInMinutes: policy.expiryMinutes,
     });
 
+    pending.otpHash = hashOtp(otpCode);
+    pending.otpExpiresAt = otpExpiryDate();
+    pending.attemptCount = 0;
+    pending.resendCount += 1;
+    pending.lastOtpSentAt = new Date();
+    await pending.save();
+
     res.json({
       message: 'A new OTP has been sent to your email',
       cooldownSeconds: policy.resendCooldownSeconds,
     });
   } catch (error) {
     console.error('Signup resend OTP error:', error.message);
+    if (respondIfEmailFailure(res, error)) return;
     res.status(500).json({ message: 'Server Error' });
   }
 });
@@ -235,6 +252,13 @@ router.post('/forgot-password/request-otp', async (req, res) => {
     const otpCode = generateOtpCode();
     const policy = getResetOtpPolicy();
 
+    await sendPasswordResetOtpEmail({
+      to: normalizedEmail,
+      name: user.name,
+      otpCode,
+      expiresInMinutes: policy.expiryMinutes,
+    });
+
     await PasswordResetOtp.findOneAndUpdate(
       { email: normalizedEmail },
       {
@@ -246,19 +270,13 @@ router.post('/forgot-password/request-otp', async (req, res) => {
         lastOtpSentAt: new Date(),
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
-
-    await sendPasswordResetOtpEmail({
-      to: normalizedEmail,
-      name: user.name,
-      otpCode,
-      expiresInMinutes: policy.expiryMinutes,
-    });
 
     return res.json(genericResponse);
   } catch (error) {
     console.error('Forgot password request OTP error:', error.message);
+    if (respondIfEmailFailure(res, error)) return;
     return res.status(500).json({ message: 'Server Error' });
   }
 });
@@ -289,12 +307,6 @@ router.post('/forgot-password/resend-otp', async (req, res) => {
 
     const otpCode = generateOtpCode();
     const policy = getResetOtpPolicy();
-    resetRecord.otpHash = hashOtp(otpCode);
-    resetRecord.otpExpiresAt = resetOtpExpiryDate();
-    resetRecord.attemptCount = 0;
-    resetRecord.resendCount += 1;
-    resetRecord.lastOtpSentAt = new Date();
-    await resetRecord.save();
 
     await sendPasswordResetOtpEmail({
       to: normalizedEmail,
@@ -303,12 +315,20 @@ router.post('/forgot-password/resend-otp', async (req, res) => {
       expiresInMinutes: policy.expiryMinutes,
     });
 
+    resetRecord.otpHash = hashOtp(otpCode);
+    resetRecord.otpExpiresAt = resetOtpExpiryDate();
+    resetRecord.attemptCount = 0;
+    resetRecord.resendCount += 1;
+    resetRecord.lastOtpSentAt = new Date();
+    await resetRecord.save();
+
     return res.json({
       ...genericResponse,
       cooldownSeconds: policy.resendCooldownSeconds,
     });
   } catch (error) {
     console.error('Forgot password resend OTP error:', error.message);
+    if (respondIfEmailFailure(res, error)) return;
     return res.status(500).json({ message: 'Server Error' });
   }
 });

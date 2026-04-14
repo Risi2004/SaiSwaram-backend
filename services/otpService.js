@@ -29,11 +29,15 @@ export function canResendOtp(pendingSignup) {
     return { allowed: false, reason: 'Maximum resend limit reached. Please restart signup.' };
   }
 
-  const elapsedSeconds = Math.floor((Date.now() - new Date(pendingSignup.lastOtpSentAt).getTime()) / 1000);
-  if (elapsedSeconds < OTP_RESEND_COOLDOWN_SECONDS) {
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(pendingSignup.lastOtpSentAt).getTime()) / 1000)
+  );
+  const waitSeconds = Math.max(0, OTP_RESEND_COOLDOWN_SECONDS - elapsedSeconds);
+  if (waitSeconds > 0) {
     return {
       allowed: false,
-      reason: `Please wait ${OTP_RESEND_COOLDOWN_SECONDS - elapsedSeconds}s before requesting another OTP.`,
+      reason: `Please wait ${waitSeconds}s before requesting another OTP.`,
     };
   }
 

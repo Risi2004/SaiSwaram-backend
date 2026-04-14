@@ -89,7 +89,7 @@ router.put('/:id', auth, async (req, res) => {
     bhajan = await Bhajan.findByIdAndUpdate(
       req.params.id,
       { $set: bhajanFields },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     res.json(bhajan);
